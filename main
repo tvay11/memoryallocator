@@ -1,0 +1,202 @@
+#include <stdio.h>
+#include <sys/types.h>
+#include <unistd.h>
+#include <errno.h>
+#include <math.h>
+
+struct node{
+	int size;
+	int free;
+	struct node* prev;
+	struct node* next;
+	void* start;
+};
+
+int nodeSizer(size_t x){
+	return((x+7) & (-8));
+}
+
+int pagefunction(size_t x){
+	int pageSize = sysconf(_SC_PAGESIZE);
+	int r = x % pageSize;
+	if(r == 0){
+		return x;
+	}
+	return x + pageSize - r;
+}
+
+//creating double-linked list
+struct node* head = NULL;
+
+void* malloc(size_t size){
+	
+	//--if head is null, start up list--
+	
+	if(head == NULL){
+		//initialization of memory list
+		int nodeSize = nodeSizer(sizeof(struct node));
+		int allocammt = pagefunction(size + nodeSize);
+		void* ret = sbrk(allocammt);
+		//errno checking
+		if(ret == (void*)-1){
+			errno = ENOMEM;
+			return NULL;
+		}
+		head = ret;
+		
+		head -> prev = NULL;
+		head -> free = 0;
+		head -> start = nodeSize + ret;
+		
+		//if theres more memory left + enough for nodeSize
+		if(allocammt > size + nodeSize*2){
+			head -> size = size;
+			
+			struct node* freeNode = ret + size + nodeSize;
+			freeNode -> size = allocammt - size - nodeSize*2;
+			freeNode -> prev = head;
+			freeNode -> next = NULL;
+			freeNode -> free = 1;
+			freeNode -> start = ret + size + nodeSize * 2;
+			
+			head -> next = freeNode;
+		}
+		else{
+			head -> size = allocammt - nodeSize; //ensures no memory waste
+			head->next = NULL;
+		}
+		
+		return head -> start;
+	}
+	
+	//--check for free nodes to fill--
+	
+	else{
+		struct node* k = head;
+		int nodeSize = nodeSizer(sizeof(struct node));
+		while(k != NULL){
+			if(k->free == 1 && k->size >= size){ 
+				if(k->size > size + nodeSize){ 
+					//split and keep a free node
+					int origSize = k->size;
+					k->size = size;
+					k->free = 0;
+					
+					struct node* newFreeNode = k->start + k->size;
+					newFreeNode->size = origSize - size - nodeSize;
+					newFreeNode->start = k->start + k->size + nodeSize;
+					newFreeNode->free = 1;
+					newFreeNode->next =	k->next;
+					newFreeNode->prev = k;
+					if(k->next != NULL){
+						newFreeNode->next->prev = newFreeNode;
+					}
+					k->next = newFreeNode;
+				}
+				else{
+					k->free = 0;
+				}
+				
+				return k->start;
+				
+			}
+			k = k->next;
+		}
+		
+		//--alloc more memory--
+		
+		int allocammt = pagefunction(size + nodeSize);
+		void* ret = sbrk(allocammt);
+		//errno checking
+		if(ret == (void*)-1){
+			errno = ENOMEM;
+			return NULL;
+		}
+		struct node* newNode = ret;
+		
+		k = head;
+		while(k->next != NULL){
+			k = k->next;
+		}
+		
+		k -> next = newNode;
+		newNode -> prev = k;
+		newNode -> start = ret + nodeSize;
+		newNode -> free = 0;
+		
+		//if enough memory left for free node + node memory
+		if(allocammt > size + nodeSize*2){
+			newNode -> size = size;
+			
+			struct node* freeNode = ret + size + nodeSize;
+			freeNode -> size = allocammt - size - nodeSize*2;
+			freeNode -> prev = newNode;
+			freeNode -> next = NULL;
+			freeNode -> free = 1;
+			freeNode -> start = ret + size + nodeSize * 2;
+			
+			newNode -> next = freeNode;
+		}
+		else{
+			newNode -> size = allocammt - nodeSize; //ensures no memory waste
+			newNode -> next = NULL;
+		}
+		
+		return newNode -> start;
+		
+	}
+}
+
+void free(void* ptr){
+	if(ptr != NULL){
+		struct node* k = head;
+		while(k != NULL){
+			if(k->start == ptr){
+				k->free = 1;
+				return;
+			}
+			k = k->next;
+		}
+	}
+}
+
+void* calloc(size_t num_of_elts, size_t elt_size){
+	void* ptr = malloc(elt_size*num_of_elts); //make int*?
+	memset(ptr,0,elt_size*num_of_elts);
+	return ptr;
+}
+
+void* realloc(void* pointer, size_t size){
+	struct node* k = head;
+	while(k != NULL){
+		if(k->start == pointer){
+			if(size > k->size){
+				//user wants more memory
+				void* ptr = malloc(size);
+				memcpy(ptr,k->start,k->size);
+				free(k);
+				return ptr;
+			}
+			else if(size < k->size){
+				void* ptr = malloc(size);
+				memcpy(ptr,k->start,size);
+				free(k);
+				return ptr;
+			}
+			else{
+				void* ptr = malloc(size);
+				memcpy(ptr,k->start,size);
+				free(k);
+				return ptr;
+			}
+		}
+		k = k->next;
+	}
+	return NULL;
+}
+
+
+int main(int argc, char* argv[]){
+	//main
+	return 0;
+}
