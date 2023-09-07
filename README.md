@@ -13,7 +13,7 @@ This project provides a custom implementation of memory management functions: `m
 
 The primary data structure used is a double linked list node:
 
-\`\`\`c
+```c
 struct node {
     int size;
     int free;
@@ -21,7 +21,7 @@ struct node {
     struct node* next;
     void* start;
 };
-\`\`\`
+```
 
 Each node represents a block of allocated or free memory.
 
