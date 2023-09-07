@@ -1,4 +1,4 @@
-# Malloc Implementation in C
+# Malloc
 
 This project provides a custom implementation of memory management functions: `malloc()`, `free()`, `calloc()`, and `realloc()` in C.
 
